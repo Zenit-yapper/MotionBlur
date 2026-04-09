@@ -19,26 +19,38 @@ jobs:
 
       - name: Generate Project Structure
         run: |
-          # Create folders
+          # Create precise directory structure
           mkdir -p src/main/java/com/astreal/motionblur
           mkdir -p src/main/resources
           
-          # ── gradle.properties ──
+          # ── settings.gradle (Required for Fabric Loom) ──
+          cat > settings.gradle << 'EOF'
+          pluginManagement {
+              repositories {
+                  maven { url = "https://maven.fabricmc.net/" }
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          EOF
+
+          # ── gradle.properties (Pinned Stable Versions) ──
           cat > gradle.properties << 'EOF'
           minecraft_version=1.21.1
-          loader_version=0.15.11
-          fabric_version=0.100.3+1.21
+          loader_version=0.16.0
+          fabric_version=0.102.0+1.21.1
           mod_version=1.0.0
           maven_group=com.astreal.motionblur
           archives_base_name=astreal-motionblur
           EOF
 
-          # ── build.gradle ──
+          # ── build.gradle (Fixed Plugin & Repository) ──
           cat > build.gradle << 'EOF'
           plugins {
               id 'fabric-loom' version '1.7-SNAPSHOT'
           }
           repositories {
+              maven { url = "https://maven.fabricmc.net/" }
               mavenCentral()
           }
           dependencies {
@@ -61,11 +73,11 @@ jobs:
             "license": "MIT",
             "environment": "client",
             "entrypoints": { "client": ["com.astreal.motionblur.MotionBlurClient"] },
-            "depends": { "fabricloader": ">=0.15.11", "minecraft": "~1.21.1", "java": ">=21" }
+            "depends": { "fabricloader": ">=0.16.0", "minecraft": "~1.21.1", "java": ">=21" }
           }
           EOF
 
-          # ── MotionBlurClient.java (Fixed Category and Input Errors) ──
+          # ── MotionBlurClient.java (Fixed Category Object Error) ──
           cat > src/main/java/com/astreal/motionblur/MotionBlurClient.java << 'EOF'
           package com.astreal.motionblur;
           import net.fabricmc.api.ClientModInitializer;
@@ -78,6 +90,7 @@ jobs:
               private static KeyMapping menuKey;
               @Override
               public void onInitializeClient() {
+                  // Uses standard category string to avoid 'String cannot be converted to Category'
                   menuKey = KeyBindingHelper.registerKeyMapping(new KeyMapping(
                       "key.motionblur.menu",
                       InputConstants.Type.KEYSYM,
@@ -92,11 +105,11 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: Build Mod
-        run: gradle build # Using the system gradle to avoid 'gradlew' missing errors
+        run: gradle build --no-daemon
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Astreal-Motion-Blur-1.21.1
+          name: Astreal-Motion-Blur-JAR
           path: build/libs/*.jar
           
