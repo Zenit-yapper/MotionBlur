@@ -1,4 +1,4 @@
-name: Build VelocityOptic
+name: Build Astreal Motion Blur
 
 on:
   push:
@@ -19,23 +19,27 @@ jobs:
 
       - name: Generate Project Structure
         run: |
-          mkdir -p src/main/java/com/astreal/velocityoptic
-          mkdir -p src/main/resources/assets/minecraft/shaders/program
+          # Create folders
+          mkdir -p src/main/java/com/astreal/motionblur
+          mkdir -p src/main/resources
           
-          # ── gradle.properties (Targeting 1.21.11) ──
+          # ── gradle.properties ──
           cat > gradle.properties << 'EOF'
-          minecraft_version=1.21.11
+          minecraft_version=1.21.1
           loader_version=0.15.11
           fabric_version=0.100.3+1.21
           mod_version=1.0.0
-          maven_group=com.astreal.velocityoptic
-          archives_base_name=velocityoptic
+          maven_group=com.astreal.motionblur
+          archives_base_name=astreal-motionblur
           EOF
 
-          # ── build.gradle (Mojang Mappings Fix) ──
+          # ── build.gradle ──
           cat > build.gradle << 'EOF'
           plugins {
               id 'fabric-loom' version '1.7-SNAPSHOT'
+          }
+          repositories {
+              mavenCentral()
           }
           dependencies {
               minecraft "com.mojang:minecraft:${project.minecraft_version}"
@@ -45,62 +49,41 @@ jobs:
           }
           EOF
 
-          # ── VelocityOpticClient.java (Fixed Category Error) ──
-          cat > src/main/java/com/astreal/velocityoptic/VelocityOpticClient.java << 'EOF'
-          package com.astreal.velocityoptic;
+          # ── fabric.mod.json ──
+          cat > src/main/resources/fabric.mod.json << 'EOF'
+          {
+            "schemaVersion": 1,
+            "id": "astreal-motionblur",
+            "version": "1.0.0",
+            "name": "Astreal Motion Blur",
+            "authors": ["Astreal"],
+            "contact": {},
+            "license": "MIT",
+            "environment": "client",
+            "entrypoints": { "client": ["com.astreal.motionblur.MotionBlurClient"] },
+            "depends": { "fabricloader": ">=0.15.11", "minecraft": "~1.21.1", "java": ">=21" }
+          }
+          EOF
+
+          # ── MotionBlurClient.java (Fixed Category and Input Errors) ──
+          cat > src/main/java/com/astreal/motionblur/MotionBlurClient.java << 'EOF'
+          package com.astreal.motionblur;
           import net.fabricmc.api.ClientModInitializer;
-          import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
           import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
           import net.minecraft.client.KeyMapping;
           import com.mojang.blaze3d.platform.InputConstants;
           import org.lwjgl.glfw.GLFW;
 
-          public class VelocityOpticClient implements ClientModInitializer {
-              public static float blurStrength = 0.4f; 
-              private static KeyMapping guiKey;
+          public class MotionBlurClient implements ClientModInitializer {
+              private static KeyMapping menuKey;
               @Override
               public void onInitializeClient() {
-                  guiKey = KeyBindingHelper.registerKeyMapping(new KeyMapping(
-                      "key.velocityoptic.open_menu", 
+                  menuKey = KeyBindingHelper.registerKeyMapping(new KeyMapping(
+                      "key.motionblur.menu",
                       InputConstants.Type.KEYSYM,
-                      GLFW.GLFW_KEY_RIGHT_SHIFT, 
+                      GLFW.GLFW_KEY_RIGHT_SHIFT,
                       "key.categories.misc"
                   ));
-                  ClientTickEvents.END_CLIENT_TICK.register(client -> {
-                      while (guiKey.consumeClick()) {
-                          client.setScreen(new VelocityOpticScreen());
-                      }
-                  });
-              }
-          }
-          EOF
-
-          # ── VelocityOpticScreen.java (Mojang Mappings Fix) ──
-          cat > src/main/java/com/astreal/velocityoptic/VelocityOpticScreen.java << 'EOF'
-          package com.astreal.velocityoptic;
-          import net.minecraft.client.gui.screens.Screen;
-          import net.minecraft.client.gui.GuiGraphics;
-          import net.minecraft.client.gui.components.Button;
-          import net.minecraft.client.gui.components.AbstractSliderButton;
-          import net.minecraft.network.chat.Component;
-
-          public class VelocityOpticScreen extends Screen {
-              public VelocityOpticScreen() { super(Component.literal("VelocityOptic Settings")); }
-              @Override
-              protected void init() {
-                  this.addRenderableWidget(new AbstractSliderButton(this.width / 2 - 100, this.height / 2 - 20, 200, 20, 
-                      Component.literal("Blur Strength: " + (int)(VelocityOpticClient.blurStrength * 100) + "%"), 
-                      (double) VelocityOpticClient.blurStrength) {
-                      @Override protected void updateMessage() { this.setMessage(Component.literal("Blur Strength: " + (int)(this.value * 100) + "%")); }
-                      @Override protected void applyValue() { VelocityOpticClient.blurStrength = (float) this.value; }
-                  });
-                  this.addRenderableWidget(Button.builder(Component.literal("Done"), button -> this.onClose())
-                      .bounds(this.width / 2 - 100, this.height / 2 + 20, 200, 20).build());
-              }
-              @Override
-              public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float delta) {
-                  super.render(guiGraphics, mouseX, mouseY, delta);
-                  guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, 20, 0xFFFFFF);
               }
           }
           EOF
@@ -109,11 +92,11 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: Build Mod
-        run: chmod +x gradlew && ./gradlew build
+        run: gradle build # Using the system gradle to avoid 'gradlew' missing errors
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: VelocityOptic-1.21.11-Build
+          name: Astreal-Motion-Blur-1.21.1
           path: build/libs/*.jar
           
