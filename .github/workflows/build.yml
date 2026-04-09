@@ -1,4 +1,4 @@
-name: Generate and Build Astreal Motion Blur
+name: Build VelocityOptic
 
 on:
   push:
@@ -7,7 +7,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,274 +17,103 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Generate project files
+      - name: Generate Project Structure
         run: |
-          # ── Directory structure ──────────────────────────────────────────
-          mkdir -p src/main/java/com/motionblur/client
-          mkdir -p src/main/java/com/motionblur/mixin
-          mkdir -p src/main/resources/assets/motionblur
-          mkdir -p gradle/wrapper
-
-          # ── settings.gradle ──────────────────────────────────────────────
-          cat > settings.gradle << 'GRADLE_SETTINGS'
-          pluginManagement {
-            repositories {
-              maven { name = 'Fabric'; url = 'https://maven.fabricmc.net/' }
-              mavenCentral()
-              gradlePluginPortal()
-            }
-          }
-          GRADLE_SETTINGS
-
-          # ── gradle.properties ────────────────────────────────────────────
-          cat > gradle.properties << 'GRADLE_PROPS'
-          org.gradle.jvmargs=-Xmx1G
-          org.gradle.parallel=true
+          mkdir -p src/main/java/com/astreal/velocityoptic
+          mkdir -p src/main/resources/assets/minecraft/shaders/program
+          
+          # ── gradle.properties (Targeting 1.21.11) ──
+          cat > gradle.properties << 'EOF'
           minecraft_version=1.21.11
-          loader_version=0.18.1
+          loader_version=0.15.11
+          fabric_version=0.100.3+1.21
           mod_version=1.0.0
-          maven_group=com.motionblur
-          archives_base_name=astrealmotionblur
-          fabric_version=0.141.1+1.21.11
-          GRADLE_PROPS
+          maven_group=com.astreal.velocityoptic
+          archives_base_name=velocityoptic
+          EOF
 
-          # ── build.gradle ─────────────────────────────────────────────────
-          cat > build.gradle << 'GRADLE_BUILD'
+          # ── build.gradle (Mojang Mappings Fix) ──
+          cat > build.gradle << 'EOF'
           plugins {
-            id 'fabric-loom' version '1.14-SNAPSHOT'
-            id 'maven-publish'
+              id 'fabric-loom' version '1.7-SNAPSHOT'
           }
-          version = project.mod_version
-          group = project.maven_group
-          base { archivesName = project.archives_base_name }
-          repositories {}
           dependencies {
-            minecraft "com.mojang:minecraft:${project.minecraft_version}"
-            mappings loom.officialMojangMappings()
-            modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-            modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+              minecraft "com.mojang:minecraft:${project.minecraft_version}"
+              mappings loom.officialMojangMappings()
+              modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+              modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
           }
-          processResources {
-            inputs.property "version", project.version
-            filesMatching("fabric.mod.json") { expand "version": project.version }
-          }
-          tasks.withType(JavaCompile).configureEach { it.options.release = 21 }
-          java {
-            withSourcesJar()
-            sourceCompatibility = JavaVersion.VERSION_21
-            targetCompatibility = JavaVersion.VERSION_21
-          }
-          GRADLE_BUILD
+          EOF
 
-          # ── fabric.mod.json ──────────────────────────────────────────────
-          cat > src/main/resources/fabric.mod.json << 'FABRIC_JSON'
-          {
-            "schemaVersion": 1,
-            "id": "astrealmotionblur",
-            "version": "${version}",
-            "name": "Astreal Motion Blur",
-            "description": "Cinematic camera and entity motion blur for Minecraft.",
-            "authors": ["You"],
-            "license": "MIT",
-            "environment": "client",
-            "entrypoints": {
-              "client": ["com.motionblur.client.MotionBlurClient"]
-            },
-            "mixins": ["astrealmotionblur.mixins.json"],
-            "depends": {
-              "fabricloader": ">=0.18.1",
-              "fabric-api": "*",
-              "minecraft": "~1.21.11"
-            }
-          }
-          FABRIC_JSON
-
-          # ── mixins json ──────────────────────────────────────────────────
-          cat > src/main/resources/astrealmotionblur.mixins.json << 'MIXINS_JSON'
-          {
-            "required": true,
-            "package": "com.motionblur.mixin",
-            "compatibilityLevel": "JAVA_21",
-            "client": ["GameRendererMixin", "EntityRendererMixin"],
-            "injectors": { "defaultRequire": 1 }
-          }
-          MIXINS_JSON
-
-          # ── MotionBlurClient.java ────────────────────────────────────────
-          cat > src/main/java/com/motionblur/client/MotionBlurClient.java << 'CLIENT_JAVA'
-          package com.motionblur.client;
+          # ── VelocityOpticClient.java (Fixed Category Error) ──
+          cat > src/main/java/com/astreal/velocityoptic/VelocityOpticClient.java << 'EOF'
+          package com.astreal.velocityoptic;
           import net.fabricmc.api.ClientModInitializer;
-          import net.fabricmc.api.EnvType;
-          import net.fabricmc.api.Environment;
+          import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+          import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+          import net.minecraft.client.KeyMapping;
+          import com.mojang.blaze3d.platform.InputConstants;
+          import org.lwjgl.glfw.GLFW;
 
-          @Environment(EnvType.CLIENT)
-          public class MotionBlurClient implements ClientModInitializer {
-              public static final String MOD_ID = "astrealmotionblur";
-              public static float CAMERA_BLUR_STRENGTH = 0.5f;
-              public static float ENTITY_TRAIL_ALPHA = 0.35f;
-              public static int ENTITY_TRAIL_LENGTH = 5;
+          public class VelocityOpticClient implements ClientModInitializer {
+              public static float blurStrength = 0.4f; 
+              private static KeyMapping guiKey;
               @Override
-              public void onInitializeClient() {}
-          }
-          CLIENT_JAVA
-
-          # ── GameRendererMixin.java ───────────────────────────────────────
-          cat > src/main/java/com/motionblur/mixin/GameRendererMixin.java << 'GAME_MIXIN'
-          package com.motionblur.mixin;
-          import com.motionblur.client.MotionBlurClient;
-          import com.mojang.blaze3d.systems.RenderSystem;
-          import com.mojang.blaze3d.vertex.*;
-          import net.minecraft.client.Minecraft;
-          import net.minecraft.client.renderer.GameRenderer;
-          import com.mojang.blaze3d.pipeline.RenderTarget;
-          import com.mojang.blaze3d.pipeline.TextureTarget;
-          import org.lwjgl.opengl.GL11;
-          import org.spongepowered.asm.mixin.Mixin;
-          import org.spongepowered.asm.mixin.Shadow;
-          import org.spongepowered.asm.mixin.injection.At;
-          import org.spongepowered.asm.mixin.injection.Inject;
-          import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-          @Mixin(GameRenderer.class)
-          public abstract class GameRendererMixin {
-              @Shadow private Minecraft minecraft;
-              private RenderTarget motionBlur$previousFrame = null;
-              private boolean motionBlur$initialized = false;
-              private int motionBlur$frameCount = 0;
-
-              @Inject(method = "render", at = @At("TAIL"))
-              private void motionBlur$onRenderTail(float partialTick, long nanoTime, boolean renderLevel, CallbackInfo ci) {
-                  if (!renderLevel) return;
-                  if (minecraft.level == null) return;
-                  if (MotionBlurClient.CAMERA_BLUR_STRENGTH <= 0.0f) return;
-                  RenderTarget main = minecraft.getMainRenderTarget();
-                  if (!motionBlur$initialized || motionBlur$previousFrame == null
-                          || motionBlur$previousFrame.width != main.width
-                          || motionBlur$previousFrame.height != main.height) {
-                      if (motionBlur$previousFrame != null) motionBlur$previousFrame.destroyBuffers();
-                      motionBlur$previousFrame = new TextureTarget(main.width, main.height, false, Minecraft.ON_OSX);
-                      motionBlur$previousFrame.setClearColor(0, 0, 0, 1);
-                      motionBlur$previousFrame.clear(Minecraft.ON_OSX);
-                      motionBlur$initialized = true;
-                      motionBlur$frameCount = 0;
-                  }
-                  main.bindWrite(true);
-                  RenderSystem.enableBlend();
-                  RenderSystem.blendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
-                  if (motionBlur$frameCount > 0) {
-                      RenderSystem.setShaderTexture(0, motionBlur$previousFrame.getColorTextureId());
-                      RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, MotionBlurClient.CAMERA_BLUR_STRENGTH);
-                      BufferBuilder buffer = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-                      buffer.addVertex(0, main.height, 0).setUv(0, 0);
-                      buffer.addVertex(main.width, main.height, 0).setUv(1, 0);
-                      buffer.addVertex(main.width, 0, 0).setUv(1, 1);
-                      buffer.addVertex(0, 0, 0).setUv(0, 1);
-                      BufferUploader.drawWithShader(buffer.buildOrThrow());
-                  }
-                  RenderSystem.disableBlend();
-                  RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
-                  main.bindRead();
-                  motionBlur$previousFrame.bindWrite(false);
-                  GL11.glCopyTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, 0, 0, main.width, main.height);
-                  main.bindWrite(true);
-                  motionBlur$frameCount++;
+              public void onInitializeClient() {
+                  guiKey = KeyBindingHelper.registerKeyMapping(new KeyMapping(
+                      "key.velocityoptic.open_menu", 
+                      InputConstants.Type.KEYSYM,
+                      GLFW.GLFW_KEY_RIGHT_SHIFT, 
+                      "key.categories.misc"
+                  ));
+                  ClientTickEvents.END_CLIENT_TICK.register(client -> {
+                      while (guiKey.consumeClick()) {
+                          client.setScreen(new VelocityOpticScreen());
+                      }
+                  });
               }
           }
-          GAME_MIXIN
+          EOF
 
-          # ── EntityRendererMixin.java ─────────────────────────────────────
-          cat > src/main/java/com/motionblur/mixin/EntityRendererMixin.java << 'ENTITY_MIXIN'
-          package com.motionblur.mixin;
-          import com.motionblur.client.MotionBlurClient;
-          import com.mojang.blaze3d.vertex.PoseStack;
-          import net.minecraft.client.Minecraft;
-          import net.minecraft.client.renderer.MultiBufferSource;
-          import net.minecraft.client.renderer.entity.EntityRenderer;
-          import net.minecraft.world.entity.Entity;
-          import net.minecraft.world.phys.Vec3;
-          import org.spongepowered.asm.mixin.Mixin;
-          import org.spongepowered.asm.mixin.injection.At;
-          import org.spongepowered.asm.mixin.injection.Inject;
-          import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-          import java.util.ArrayDeque;
-          import java.util.Deque;
-          import java.util.WeakHashMap;
+          # ── VelocityOpticScreen.java (Mojang Mappings Fix) ──
+          cat > src/main/java/com/astreal/velocityoptic/VelocityOpticScreen.java << 'EOF'
+          package com.astreal.velocityoptic;
+          import net.minecraft.client.gui.screens.Screen;
+          import net.minecraft.client.gui.GuiGraphics;
+          import net.minecraft.client.gui.components.Button;
+          import net.minecraft.client.gui.components.AbstractSliderButton;
+          import net.minecraft.network.chat.Component;
 
-          @Mixin(EntityRenderer.class)
-          public abstract class EntityRendererMixin<T extends Entity> {
-              private static final WeakHashMap<Entity, Deque<Vec3>> motionBlur$trailMap = new WeakHashMap<>();
-
-              @Inject(method = "render", at = @At("HEAD"))
-              private void motionBlur$renderTrail(T entity, float entityYaw, float partialTick, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight, CallbackInfo ci) {
-                  if (MotionBlurClient.ENTITY_TRAIL_ALPHA <= 0.0f) return;
-                  if (MotionBlurClient.ENTITY_TRAIL_LENGTH <= 0) return;
-                  Minecraft mc = Minecraft.getInstance();
-                  if (entity == mc.player) return;
-                  Vec3 currentPos = entity.position();
-                  Deque<Vec3> trail = motionBlur$trailMap.computeIfAbsent(entity, e -> new ArrayDeque<>());
-                  trail.addFirst(currentPos);
-                  while (trail.size() > MotionBlurClient.ENTITY_TRAIL_LENGTH) trail.removeLast();
-                  if (trail.size() < 2) return;
-                  int ghostIndex = 0;
-                  for (Vec3 pastPos : trail) {
-                      if (ghostIndex == 0) { ghostIndex++; continue; }
-                      float alpha = MotionBlurClient.ENTITY_TRAIL_ALPHA * (1.0f - (float) ghostIndex / (float) MotionBlurClient.ENTITY_TRAIL_LENGTH);
-                      if (alpha <= 0.01f) break;
-                      double dx = pastPos.x - currentPos.x;
-                      double dy = pastPos.y - currentPos.y;
-                      double dz = pastPos.z - currentPos.z;
-                      poseStack.pushPose();
-                      poseStack.translate(dx, dy, dz);
-                      com.mojang.blaze3d.systems.RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, alpha);
-                      @SuppressWarnings("unchecked")
-                      EntityRenderer<T> self = (EntityRenderer<T>) (Object) this;
-                      self.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);
-                      com.mojang.blaze3d.systems.RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
-                      poseStack.popPose();
-                      ghostIndex++;
-                  }
+          public class VelocityOpticScreen extends Screen {
+              public VelocityOpticScreen() { super(Component.literal("VelocityOptic Settings")); }
+              @Override
+              protected void init() {
+                  this.addRenderableWidget(new AbstractSliderButton(this.width / 2 - 100, this.height / 2 - 20, 200, 20, 
+                      Component.literal("Blur Strength: " + (int)(VelocityOpticClient.blurStrength * 100) + "%"), 
+                      (double) VelocityOpticClient.blurStrength) {
+                      @Override protected void updateMessage() { this.setMessage(Component.literal("Blur Strength: " + (int)(this.value * 100) + "%")); }
+                      @Override protected void applyValue() { VelocityOpticClient.blurStrength = (float) this.value; }
+                  });
+                  this.addRenderableWidget(Button.builder(Component.literal("Done"), button -> this.onClose())
+                      .bounds(this.width / 2 - 100, this.height / 2 + 20, 200, 20).build());
+              }
+              @Override
+              public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float delta) {
+                  super.render(guiGraphics, mouseX, mouseY, delta);
+                  guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, 20, 0xFFFFFF);
               }
           }
-          ENTITY_MIXIN
-
-          # ── Gradle wrapper ───────────────────────────────────────────────
-          cat > gradle/wrapper/gradle-wrapper.properties << 'WRAPPER_PROPS'
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.8-bin.zip
-          validateDistributionUrl=true
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          WRAPPER_PROPS
-
-          # Download real gradle wrapper jar
-          curl -sL "https://github.com/gradle/gradle/releases/download/v8.8.0/gradle-8.8-bin.zip" -o gradle-bin.zip
-          unzip -j gradle-bin.zip "gradle-8.8/lib/plugins/gradle-wrapper-*.jar" -d gradle/wrapper/ 2>/dev/null || \
-          curl -sL "https://raw.githubusercontent.com/gradle/gradle/v8.8.0/gradle/wrapper/gradle-wrapper.jar" \
-            -o gradle/wrapper/gradle-wrapper.jar
-
-          chmod +x gradlew 2>/dev/null || true
-
-          # Write gradlew
-          cat > gradlew << 'GRADLEW'
-          #!/bin/sh
-          APP_HOME=$(cd "$(dirname "$0")" && pwd)
-          CLASSPATH="$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
-          exec java -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"
-          GRADLEW
-          chmod +x gradlew
-
-          echo "✅ All files generated!"
+          EOF
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Build mod
-        run: ./gradlew build --stacktrace
+      - name: Build Mod
+        run: chmod +x gradlew && ./gradlew build
 
-      - name: Upload JAR
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Astreal-Motion-Blur-1.21.11
-          path: build/libs/*[^-sources].jar
-          if-no-files-found: error
+          name: VelocityOptic-1.21.11-Build
+          path: build/libs/*.jar
+          
